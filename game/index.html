@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VICE HARBOR — an open-world crime game in Port Solenne</title>
+<style>
+  :root {
+    --ink: #fff8ec; --muted: #cfe0e8; --accent: #ffd23e; --pink: #f15bb5;
+    --danger: #ff2e4d; --panel: rgba(16, 26, 34, 0.72); --hair: rgba(255,255,255,0.22);
+    --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-readout: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #79b5cc; color: var(--ink); font-family: var(--font-ui); }
+  #game, #game canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #mission-panel { position: fixed; left: 22px; top: 18px; max-width: 430px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--hair); border-radius: 10px; }
+  #mission-title { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+  #objective { font-size: 16px; line-height: 1.35; margin: 0; }
+  #timer { font-family: var(--font-readout); font-size: 15px; color: var(--accent); margin-top: 5px; min-height: 18px; }
+  #timer.urgent { color: var(--danger); }
+  #top-right { position: fixed; right: 22px; top: 18px; text-align: right; }
+  #wanted { font-size: 30px; letter-spacing: 3px; color: var(--accent); text-shadow: 0 2px 8px rgba(0,0,0,.5); min-height: 36px; }
+  #wanted.hot { color: var(--danger); }
+  #cash { font-family: var(--font-readout); font-size: 30px; color: #7bf1a8; text-shadow: 0 2px 8px rgba(0,0,0,.55); }
+  #bottom-left { position: fixed; left: 22px; bottom: 20px; width: 230px; }
+  #health-wrap { height: 13px; background: rgba(0,0,0,.45); border: 1px solid var(--hair); border-radius: 7px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: #06d6a0; transition: width 150ms linear; }
+  #bust-wrap { margin-top: 7px; height: 9px; background: rgba(0,0,0,.45); border-radius: 5px; overflow: hidden; }
+  #bust-fill { height: 100%; width: 0; background: var(--danger); }
+  #bust-label { font-size: 11px; letter-spacing: .18em; color: var(--danger); margin-top: 3px; }
+  #bottom-right { position: fixed; right: 22px; bottom: 20px; text-align: right; }
+  #minimap { width: 176px; height: 176px; border-radius: 50%; border: 3px solid rgba(255,255,255,.75); box-shadow: 0 6px 24px rgba(0,0,0,.4); background: #20303a; }
+  #zone-name { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 6px rgba(0,0,0,.6); margin-top: 6px; }
+  #speed { font-family: var(--font-readout); font-size: 22px; color: var(--ink); text-shadow: 0 1px 6px rgba(0,0,0,.6); min-height: 26px; }
+  #crosshair { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 20px; color: rgba(255,255,255,.85); text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+  #banner { position: fixed; left: 50%; top: 24%; transform: translateX(-50%); text-align: center; width: min(760px, 92vw); }
+  #banner[hidden] { display: none; }
+  #banner-title { font-size: 44px; margin: 0; letter-spacing: .02em; color: var(--accent); text-shadow: 0 3px 18px rgba(0,0,0,.65); text-transform: uppercase; }
+  #banner-copy { font-size: 17px; line-height: 1.45; color: var(--ink); text-shadow: 0 2px 10px rgba(0,0,0,.8); margin: 8px 0 0; }
+  #toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); padding: 9px 16px; background: var(--panel); border: 1px solid var(--hair); border-radius: 8px; font-size: 15px; }
+  #toast[hidden] { display: none; }
+  #hint { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); font-size: 13.5px; color: var(--muted); text-shadow: 0 1px 5px rgba(0,0,0,.75); }
+  .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: linear-gradient(180deg, rgba(20,30,44,.38), rgba(20,30,44,.66)); }
+  .overlay[hidden] { display: none; }
+  .panel { width: min(560px, 100%); padding: 30px 32px; background: rgba(14, 24, 33, 0.88); border: 1px solid var(--hair); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+  .panel h1 { margin: 0; font-size: 52px; line-height: 1.02; letter-spacing: .01em; }
+  .panel h1 span { color: var(--pink); }
+  .panel h2 { margin: 0 0 8px; font-size: 34px; }
+  .panel p { margin: 10px 0 0; font-size: 15.5px; line-height: 1.55; color: var(--muted); }
+  .cta { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+  button { font: inherit; font-weight: 600; padding: 12px 18px; border-radius: 9px; border: 1px solid var(--accent); background: var(--accent); color: #1c2430; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--ink); border-color: var(--hair); }
+  button:hover { filter: brightness(1.1); }
+  .keys { margin: 20px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 7px 18px; font-size: 13.5px; color: var(--muted); }
+  kbd { padding: 1px 6px; border: 1px solid var(--hair); border-radius: 4px; font-family: var(--font-readout); font-size: 12px; color: var(--ink); }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud" aria-hidden="true">
+  <div id="mission-panel">
+    <p id="mission-title">VICE HARBOR</p>
+    <p id="objective">Welcome to Port Solenne.</p>
+    <div id="timer"></div>
+  </div>
+  <div id="top-right"><div id="wanted"></div><div id="cash">$0</div></div>
+  <div id="bottom-left">
+    <div id="health-wrap"><div id="health-fill"></div></div>
+    <div id="bust-wrap" hidden><div id="bust-fill"></div></div>
+    <div id="bust-label"></div>
+  </div>
+  <div id="bottom-right">
+    <canvas id="minimap" width="176" height="176"></canvas>
+    <div id="zone-name">Port Solenne</div>
+    <div id="speed"></div>
+  </div>
+  <div id="crosshair">·</div>
+  <div id="banner" hidden><h2 id="banner-title"></h2><p id="banner-copy"></p></div>
+  <div id="toast" hidden></div>
+  <div id="hint">WASD move · E enter car · Shift run · Click shoot · P pause</div>
+</div>
+
+<div id="title-screen" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true" aria-labelledby="game-title">
+    <h1 id="game-title">VICE <span>HARBOR</span></h1>
+    <p>Port Solenne, a sun-soaked harbour city. You are <b>Jules Marlowe</b>, a broke courier who owes Rosa Venn for a sunken boat. Run her jobs — drive, deliver, dodge the harbour patrol — pay the debt, and become the Harbour King. Steal cars, raise hell, lose the heat.</p>
+    <div class="cta">
+      <button id="play-new" type="button">New game</button>
+      <button id="play-continue" class="ghost" type="button" hidden>Continue</button>
+    </div>
+    <ul class="keys">
+      <li><kbd>W A S D</kbd> Move / drive</li>
+      <li><kbd>Mouse</kbd> Camera (click locks)</li>
+      <li><kbd>E</kbd> Enter / leave car</li>
+      <li><kbd>Shift</kbd> Sprint</li>
+      <li><kbd>Click</kbd> Shoot (on foot)</li>
+      <li><kbd>Space</kbd> Handbrake</li>
+      <li><kbd>P</kbd> Pause</li>
+      <li><kbd>M</kbd> Mute engine &amp; sirens</li>
+    </ul>
+    <p id="best-line"></p>
+  </section>
+</div>
+
+<div id="pause-screen" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true">
+    <h2>Paused</h2>
+    <p id="pause-copy">Port Solenne waits. Your progress is saved after every mission.</p>
+    <div class="cta">
+      <button id="resume" type="button">Resume</button>
+      <button id="restart" class="ghost" type="button">Restart story</button>
+    </div>
+  </section>
+</div>
+
+<div id="fate-screen" class="overlay" hidden>
+  <section class="panel" role="dialog" aria-modal="true">
+    <h2 id="fate-title">BUSTED</h2>
+    <p id="fate-copy">The harbour patrol got you.</p>
+    <div class="cta"><button id="fate-ok" type="button">Back to the streets</button></div>
+  </section>
+</div>
+
+<p id="status" role="status" aria-live="polite"></p>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
